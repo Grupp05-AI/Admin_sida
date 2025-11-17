@@ -1,45 +1,48 @@
 // public/app.js
 
 function getRegionFromCoordinates(lat, lon) {
-  // Return region with emoji and letter based on Swedish military regions
-  if (!isFinite(lat) || !isFinite(lon)) return { name: 'Okänd', emoji: '❓', letter: '?' };
+  // Return region based on Swedish military regions
+  if (!isFinite(lat) || !isFinite(lon)) return { name: 'Okänd' };
   
   // Gotland - island coordinates
   if (lat >= 56.9 && lat <= 58.0 && lon >= 18.0 && lon <= 19.5) {
-    return { name: 'Gotland', emoji: '🏝️', letter: 'G' };
+    return { name: 'Gotland' };
   }
   
   // Norra - Northern Sweden (above ~60.5°N)
   if (lat >= 60.5) {
-    return { name: 'Norra', emoji: '🌲', letter: 'N' };
+    return { name: 'Norra' };
   }
   
   // Västra - Western coast (longitude < ~12.5 and below 60.5°N)
   if (lon < 12.5 && lat < 60.5 && lat >= 55.3) {
-    return { name: 'Västra', emoji: '🌊', letter: 'V' };
+    return { name: 'Västra' };
   }
   
   // Mellersta - Central Sweden (between Norra and Södra, east of Västra)
   if (lat >= 58.5 && lat < 60.5 && lon >= 12.5) {
-    return { name: 'Mellersta', emoji: '🏔️', letter: 'M' };
+    return { name: 'Mellersta' };
   }
   
   // Södra - Southern Sweden (below 58.5°N, excluding Västra region)
   if (lat < 58.5 || (lat < 60.5 && lat >= 55.3 && lon >= 12.5)) {
-    return { name: 'Södra', emoji: '🌾', letter: 'S' };
+    return { name: 'Södra' };
   }
   
-  return { name: 'Okänd', emoji: '❓', letter: '?' };
+  return { name: 'Okänd' };
 }
 
 const state = {
   page: 1,
-  limit: 50,
+  limit: 7,
   q: "",
   from: "",
   to: "",
   cats: new Set(),
-  tips: [],
+  region: "",
+  threatLevel: "",
+  allTips: [], // All tips from server
+  tips: [], // Current page tips
   markersById: new Map(),
   expandedTipId: null,
 };
@@ -49,10 +52,14 @@ const els = {
   from: document.getElementById("from"),
   to: document.getElementById("to"),
   cats: document.getElementById("cats"),
+  regions: document.getElementById("regions"),
+  threatLevels: document.getElementById("threatLevels"),
   list: document.getElementById("list"),
   prev: document.getElementById("prev"),
   next: document.getElementById("next"),
+  firstPage: document.getElementById("firstPage"),
   pageInfo: document.getElementById("pageInfo"),
+  zoomOutBtn: document.getElementById("zoomOutBtn"),
 };
 
 let map, markerLayer;
@@ -65,11 +72,17 @@ async function init() {
     preferCanvas: true,
     minZoom: 4,
     maxBounds: [[54, 5], [72, 32]],  // Skandinaviens gränser
-    maxBoundsViscosity: 1.0  // Håller kartan inom gränserna
+    maxBoundsViscosity: 1.0,  // Håller kartan inom gränserna
+    zoomControl: false  // Stäng av standard zoom-kontroller
   }).setView([62, 16], 4.6);
   L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
     attribution: '&copy; OSM & Carto',
     maxZoom: 19
+  }).addTo(map);
+  
+  // Add zoom control to top-right corner
+  L.control.zoom({
+    position: 'topright'
   }).addTo(map);
   markerLayer = L.markerClusterGroup({
     maxClusterRadius: 100, // Gruppa markörer inom 100 pixlar (~2 km)
@@ -91,8 +104,24 @@ async function init() {
     state.page = 1;
     loadTips();
   });
-  els.prev.onclick = () => { if (state.page > 1) { state.page--; loadTips(); } };
-  els.next.onclick = () => { state.page++; loadTips(); };
+  els.regions.addEventListener("change", () => { 
+    state.region = els.regions.value;
+    state.page = 1;
+    filterAndPaginate();
+  });
+  els.threatLevels.addEventListener("change", () => { 
+    state.threatLevel = els.threatLevels.value;
+    state.page = 1;
+    filterAndPaginate();
+  });
+  els.prev.onclick = () => { if (state.page > 1) { state.page--; filterAndPaginate(); } };
+  els.next.onclick = () => { state.page++; filterAndPaginate(); };
+  els.firstPage.onclick = () => { state.page = 1; filterAndPaginate(); };
+  
+  // Zoom out button to show all of Sweden
+  els.zoomOutBtn.onclick = () => {
+    map.flyTo([62, 16], 4.6, { duration: 1.0 });
+  };
 }
 
 async function loadCategories() {
@@ -115,9 +144,9 @@ async function loadCategories() {
 }
 
 async function loadTips() {
+  // Load ALL tips that match server-side filters (search, category, date)
   const params = new URLSearchParams();
-  params.set("page", String(state.page));
-  params.set("limit", String(state.limit));
+  params.set("limit", "10000"); // Get all matching tips
   if (state.q) params.set("q", state.q);
   if (state.from) params.set("from", state.from);
   if (state.to) params.set("to", state.to);
@@ -131,18 +160,70 @@ async function loadTips() {
   }
   const payload = await res.json();
 
-  state.tips = payload.items || [];
-  renderList();
-  renderMarkers();
+  // Store all tips from server
+  state.allTips = payload.items || [];
+  
+  // Filter by region and paginate
+  filterAndPaginate();
+  
+  // Render markers with all tips
+  renderMarkers(state.allTips);
+}
 
-  const totalPages = Math.max(1, Math.ceil((payload.total || 0) / state.limit));
-  els.pageInfo.textContent = `Sida ${payload.page || 1} / ${totalPages}`;
+function filterAndPaginate() {
+  // Filter by region and threat level if selected
+  let filteredTips = state.allTips;
+  
+  if (state.region) {
+    filteredTips = filteredTips.filter(t => {
+      const region = getRegionFromCoordinates(Number(t.latitude), Number(t.longitude));
+      return region.name === state.region;
+    });
+  }
+  
+  if (state.threatLevel) {
+    filteredTips = filteredTips.filter(t => {
+      const level = (t.threat_level || '').toLowerCase().trim();
+      // Normalize threat level (remove "hotbild" suffix and handle variations)
+      const normalizedLevel = level.replace(/\s*hotbild\s*$/i, '').trim();
+      return normalizedLevel === state.threatLevel || level === state.threatLevel;
+    });
+  }
+
+  // Calculate pagination
+  const totalFiltered = filteredTips.length;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / state.limit));
+  
+  // Ensure page is within bounds
+  if (state.page > totalPages) {
+    state.page = 1;
+  }
+  
+  // Get tips for current page
+  const startIndex = (state.page - 1) * state.limit;
+  const endIndex = startIndex + state.limit;
+  state.tips = filteredTips.slice(startIndex, endIndex);
+  
+  // Render list and update pagination UI
+  renderList();
+  
+  els.pageInfo.textContent = `Sida ${state.page} / ${totalPages}`;
   els.prev.disabled = (state.page <= 1);
   els.next.disabled = (state.page >= totalPages);
+  
+  // Show "First page" button only on last page (and not if there's only 1 page)
+  if (state.page >= totalPages && totalPages > 1) {
+    els.firstPage.style.display = 'inline-block';
+  } else {
+    els.firstPage.style.display = 'none';
+  }
 }
+
+
 
 function renderList() {
   els.list.innerHTML = "";
+  
   if (!state.tips.length) {
     els.list.innerHTML = `<div style="color:#94a3b8">Inga tips hittades.</div>`;
     return;
@@ -199,7 +280,7 @@ function renderList() {
         ${when ? `<span>${when}</span>` : ""}
         ${t.category ? `<span>${escapeHtml(t.category)}</span>` : ""}
         ${coords ? `<span>${coords}</span>` : ""}
-        <span style="font-weight: bold;">${region.emoji} ${region.name}</span>
+        <span style="font-weight: bold;">${region.name}</span>
       </div>
       <div>${escapeHtml((t.summary || t.threat_reason || "").slice(0, 240))}${(t.summary || t.threat_reason || "").length>240 ? "…" : ""}</div>
     `;
@@ -272,7 +353,7 @@ function renderExpandedTip(t) {
   let detailsHtml = `
     <h3 style="margin: 0 0 8px; font-size: 16px; color: #e5e7eb;">${threatDot}${escapeHtml(t.text || "(utan text)")}</h3>
     <div style="margin-bottom: 12px; padding: 8px; background: rgba(59, 130, 246, 0.1); border-radius: 6px; font-size: 13px;">
-      <strong style="color: #e5e7eb;">Region:</strong> <span style="font-weight: bold;">${region.emoji} ${region.letter} - ${region.name}</span>
+      <strong style="color: #e5e7eb;">Region:</strong> <span style="font-weight: bold;">${region.name}</span>
     </div>
     <div style="font-size: 13px; line-height: 1.6;">
   `;
@@ -375,7 +456,7 @@ function formatLabel(key) {
     .join(' ');
 }
 
-function renderMarkers() {
+function renderMarkers(tipsToRender = state.allTips) {
   markerLayer.clearLayers();
   state.markersById = new Map();
 
@@ -397,8 +478,26 @@ function renderMarkers() {
     'lag': 'pulse-lag'
   };
 
+  // Filter tips by region and threat level if selected
+  let filteredTips = tipsToRender;
+  
+  if (state.region) {
+    filteredTips = filteredTips.filter(t => {
+      const region = getRegionFromCoordinates(Number(t.latitude), Number(t.longitude));
+      return region.name === state.region;
+    });
+  }
+  
+  if (state.threatLevel) {
+    filteredTips = filteredTips.filter(t => {
+      const level = (t.threat_level || '').toLowerCase().trim();
+      const normalizedLevel = level.replace(/\s*hotbild\s*$/i, '').trim();
+      return normalizedLevel === state.threatLevel || level === state.threatLevel;
+    });
+  }
+
   const pts = [];
-  state.tips.forEach(t => {
+  filteredTips.forEach(t => {
     const lat = Number(t.latitude);
     const lon = Number(t.longitude);
     if (!isFinite(lat) || !isFinite(lon)) return;
@@ -446,9 +545,51 @@ function focusTip(id) {
   map.flyTo(ll, Math.max(map.getZoom(), 8), { duration: 0.5 });
   m.openPopup();
   
+  // Find the tip in all tips
+  const tip = state.allTips.find(t => t.id === id);
+  if (!tip) return;
+  
+  // Apply current filters to find which page the tip should be on
+  let filteredTips = state.allTips;
+  
+  if (state.region) {
+    filteredTips = filteredTips.filter(t => {
+      const region = getRegionFromCoordinates(Number(t.latitude), Number(t.longitude));
+      return region.name === state.region;
+    });
+  }
+  
+  if (state.threatLevel) {
+    filteredTips = filteredTips.filter(t => {
+      const level = (t.threat_level || '').toLowerCase().trim();
+      const normalizedLevel = level.replace(/\s*hotbild\s*$/i, '').trim();
+      return normalizedLevel === state.threatLevel || level === state.threatLevel;
+    });
+  }
+  
+  // Find which page the tip is on
+  const tipIndex = filteredTips.findIndex(t => t.id === id);
+  if (tipIndex === -1) {
+    // Tip not found with current filters - clear filters and try again
+    state.region = "";
+    state.threatLevel = "";
+    els.regions.value = "";
+    els.threatLevels.value = "";
+    filteredTips = state.allTips;
+    const newTipIndex = filteredTips.findIndex(t => t.id === id);
+    if (newTipIndex !== -1) {
+      state.page = Math.floor(newTipIndex / state.limit) + 1;
+    } else {
+      state.page = 1;
+    }
+  } else {
+    // Calculate which page the tip is on
+    state.page = Math.floor(tipIndex / state.limit) + 1;
+  }
+  
   // Expand the tip in the left panel
   state.expandedTipId = id;
-  renderList();
+  filterAndPaginate();
 }
 
 // Make focusTip globally available

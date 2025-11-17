@@ -4,6 +4,11 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Rapporter – Admin</title>
+  
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+  <link rel="apple-touch-icon" href="/favicon.svg" />
 
   <link
     rel="stylesheet"
@@ -187,6 +192,33 @@
       font-weight: bold !important;
       font-size: 12px !important;
     }
+    
+    /* Zoom out button */
+    .zoom-out-btn {
+      position: absolute;
+      top: 10px;
+      right: 80px; /* Move left to make room for zoom controls */
+      z-index: 1000;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 12px;
+      color: var(--fg);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+      transition: all 0.2s ease;
+    }
+    .zoom-out-btn:hover {
+      background: var(--chip);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+    }
+    .zoom-out-btn:active {
+      transform: translateY(0);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    }
   </style>
 </head>
 <body>
@@ -204,6 +236,30 @@
       </select>
     </div>
 
+    <div>
+      <small style="color:var(--muted)">Region</small>
+      <select id="regions" class="select" style="width: 100%;">
+        <option value="">-- Alla regioner --</option>
+        <option value="Norra">Norra</option>
+        <option value="Mellersta">Mellersta</option>
+        <option value="Västra">Västra</option>
+        <option value="Södra">Södra</option>
+        <option value="Gotland">Gotland</option>
+      </select>
+    </div>
+
+    <div>
+      <small style="color:var(--muted)">Hotbild</small>
+      <select id="threatLevels" class="select" style="width: 100%;">
+        <option value="">-- Alla hotnivåer --</option>
+        <option value="kritisk">Kritisk</option>
+        <option value="hög">Hög</option>
+        <option value="medel">Medel</option>
+        <option value="låg">Låg</option>
+        <option value="info">Info</option>
+      </select>
+    </div>
+
     <div class="row">
       <input id="from" class="date" type="date" />
       <input id="to" class="date" type="date" />
@@ -215,12 +271,14 @@
       <button id="prev" class="btn">Föregående</button>
       <span id="pageInfo" style="color:var(--muted)"></span>
       <button id="next" class="btn">Nästa</button>
+      <button id="firstPage" class="btn" style="display: none;">🏠 Första sidan</button>
     </div>
   </aside>
 
 
   <main>
     <div id="map"></div>
+    <button id="zoomOutBtn" class="zoom-out-btn">🇸🇪 Zooma ut</button>
     <div id="legend" class="map-legend">
       <strong style="font-size:13px;">Hotöversikt</strong>
   <div class="legend-row"><span class="pulse pulse-kritisk"></span> Kritisk hotbild</div>
