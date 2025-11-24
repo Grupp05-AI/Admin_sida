@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="120" height="120">
+  <!-- Crown -->
+  <path d="M 100 10 L 85 40 L 75 35 L 70 50 L 60 40 L 55 60 L 50 50 L 40 70 L 35 55 L 25 75 L 100 85 L 175 75 L 165 55 L 160 70 L 150 50 L 145 60 L 140 40 L 130 50 L 125 35 L 115 40 Z" fill="#000" stroke="#000" stroke-width="1"/>
+  
+  <!-- Shield outline -->
+  <path d="M 100 95 Q 70 110 70 135 Q 70 160 100 175 Q 130 160 130 135 Q 130 110 100 95 Z" fill="none" stroke="#000" stroke-width="2.5"/>
+  
+  <!-- Three crowns inside shield (Tre Kronor) -->
+  <g transform="translate(75, 120)">
+    <circle cx="0" cy="0" r="3" fill="#000"/>
+    <path d="M -2 2 L -3 5 L -1 5 L 0 3 L 1 5 L 3 5 L 2 2 Z" fill="#000"/>
+  </g>
+  <g transform="translate(100, 115)">
+    <circle cx="0" cy="0" r="3" fill="#000"/>
+    <path d="M -2 2 L -3 5 L -1 5 L 0 3 L 1 5 L 3 5 L 2 2 Z" fill="#000"/>
+  </g>
+  <g transform="translate(125, 120)">
+    <circle cx="0" cy="0" r="3" fill="#000"/>
+    <path d="M -2 2 L -3 5 L -1 5 L 0 3 L 1 5 L 3 5 L 2 2 Z" fill="#000"/>
+  </g>
+  
+  <!-- Cross in center -->
+  <rect x="98" y="105" width="4" height="35" fill="#000"/>
+  <rect x="83" y="120" width="34" height="4" fill="#000"/>
+</svg>

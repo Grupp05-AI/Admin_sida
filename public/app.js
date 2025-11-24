@@ -85,8 +85,8 @@ async function init() {
     position: 'topright'
   }).addTo(map);
   markerLayer = L.markerClusterGroup({
-    maxClusterRadius: 100, // Gruppa markörer inom 100 pixlar (~2 km)
-    disableClusteringAtZoom: 12, // Visa individuella markörer från zoomnivå 12
+    maxClusterRadius: 40, // Gruppa markörer inom 40 pixlar (mindre känslig)
+    disableClusteringAtZoom: 10, // Visa individuella markörer från zoomnivå 10 (tidigare än förut)
     showCoverageOnHover: false,
     zoomToBoundsOnClick: true,
     spiderfyOnMaxZoom: true,
@@ -166,11 +166,14 @@ async function loadTips() {
   // Filter by region and paginate
   filterAndPaginate();
   
-  // Render markers with all tips
+  // Always render markers with all tips (respecting client-side filters)
   renderMarkers(state.allTips);
+  
+  // Force map to recalculate size and bounds
+  setTimeout(() => map.invalidateSize(), 100);
 }
 
-function filterAndPaginate() {
+function filterAndPaginate(shouldFitBounds = true) {
   // Filter by region and threat level if selected
   let filteredTips = state.allTips;
   
@@ -206,6 +209,9 @@ function filterAndPaginate() {
   
   // Render list and update pagination UI
   renderList();
+  
+  // Update map to show only filtered tips
+  renderMarkers(filteredTips, shouldFitBounds);
   
   els.pageInfo.textContent = `Sida ${state.page} / ${totalPages}`;
   els.prev.disabled = (state.page <= 1);
@@ -288,7 +294,7 @@ function renderList() {
       state.expandedTipId = t.id;
       renderList();
       
-      // Zoom to the tip on the map
+      // Zoom in on the map when clicking tip in left list
       if (isFinite(t.latitude) && isFinite(t.longitude)) {
         const lat = Number(t.latitude);
         const lon = Number(t.longitude);
@@ -456,7 +462,7 @@ function formatLabel(key) {
     .join(' ');
 }
 
-function renderMarkers(tipsToRender = state.allTips) {
+function renderMarkers(tipsToRender = state.allTips, shouldFitBounds = true) {
   markerLayer.clearLayers();
   state.markersById = new Map();
 
@@ -530,11 +536,13 @@ function renderMarkers(tipsToRender = state.allTips) {
     pts.push([lat, lon]);
   });
 
-  if (pts.length) {
-    const bounds = L.latLngBounds(pts);
-    map.fitBounds(bounds.pad(0.2), { animate: false });
-  } else {
-    map.setView([62, 16], 4.6);
+  if (shouldFitBounds) {
+    if (pts.length) {
+      const bounds = L.latLngBounds(pts);
+      map.fitBounds(bounds.pad(0.2), { animate: false });
+    } else {
+      map.setView([62, 16], 4.6);
+    }
   }
 }
 
@@ -542,7 +550,8 @@ function focusTip(id) {
   const m = state.markersById.get(id);
   if (!m) return;
   const ll = m.getLatLng();
-  map.flyTo(ll, Math.max(map.getZoom(), 8), { duration: 0.5 });
+  // Pan to the tip without changing zoom level
+  map.panTo(ll, { duration: 0.5 });
   m.openPopup();
   
   // Find the tip in all tips
@@ -589,7 +598,7 @@ function focusTip(id) {
   
   // Expand the tip in the left panel
   state.expandedTipId = id;
-  filterAndPaginate();
+  filterAndPaginate(false);
 }
 
 // Make focusTip globally available
