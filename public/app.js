@@ -527,11 +527,16 @@ function renderMarkers(tipsToRender = state.allTips, shouldFitBounds = true) {
       <div style="max-width: 250px;">
         <strong>${escapeHtml(t.text || "(utan text)")}</strong><br/>
         ${escapeHtml(t.summary || t.threat_reason || "")}<br/>
-        <button onclick="focusTip(${t.id})" style="margin-top: 8px; padding: 6px 10px; background: #60a5fa; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px;">
-          → Gå till tips
+        <button id="forward-popup-${t.id}" onclick="forwardTipFromPopup(${t.id})" style="margin-top: 8px; padding: 6px 10px; background: #1b2130; color: white; border: 1px solid #2a3548; border-radius: 4px; cursor: pointer; font-size: 13px; width: 100%;">
+          📤 Vidarebefodra tips
         </button>
       </div>
     `);
+    marker.on('click', () => {
+      // Open expanded tip view in left panel when marker is clicked
+      state.expandedTipId = t.id;
+      renderList();
+    });
     state.markersById.set(t.id, marker);
     pts.push([lat, lon]);
   });
@@ -601,8 +606,29 @@ function focusTip(id) {
   filterAndPaginate(false);
 }
 
-// Make focusTip globally available
-window.focusTip = focusTip;
+// Forward tip from popup button
+function forwardTipFromPopup(id) {
+  const btn = document.getElementById(`forward-popup-${id}`);
+  if (!btn) return;
+  
+  const isForwarded = btn.dataset.forwarded === 'true';
+  if (!isForwarded) {
+    btn.textContent = "✓ Tips vidarebefodrad";
+    btn.style.background = "#16a34a";
+    btn.style.borderColor = "#16a34a";
+    btn.dataset.forwarded = 'true';
+    console.log('Tip forwarded from popup:', id);
+  } else {
+    btn.textContent = "📤 Vidarebefodra tips";
+    btn.style.background = "#1b2130";
+    btn.style.borderColor = "#2a3548";
+    btn.dataset.forwarded = 'false';
+    console.log('Tip forward cancelled from popup:', id);
+  }
+}
+
+// Make forwardTipFromPopup globally available
+window.forwardTipFromPopup = forwardTipFromPopup;
 
 
 
